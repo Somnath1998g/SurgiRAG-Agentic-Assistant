@@ -1,0 +1,60 @@
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*.json
+service-account*.json
+
+# Private surgery data and derived artifacts
+/data/
+/vector_store/
+/evaluation/
+/evaluation_results/
+/rag_query_logs.csv
+
+# Python caches and environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
+# Notebook checkpoints and temporary files
+.ipynb_checkpoints/
+.~lock.*#
+*.swp
+*.swo
+*~
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Embeddings, indexes, models and archives
+*.npy
+*.npz
+*.index
+*.faiss
+*.pkl
+*.pickle
+*.pt
+*.pth
+*.onnx
+*.engine
+*.safetensors
+*.zip
+*.log
+.cache/
+models/
+checkpoints/
+
+# Local exploratory notebook
+/data_processing.ipynb
