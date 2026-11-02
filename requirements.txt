@@ -1,0 +1,12 @@
+# Runtime dependencies identified from src/*.py imports.
+# Versions were not available in the uploaded project; this is not a tested lockfile.
+python-dotenv
+faiss-cpu
+numpy
+pandas
+rank-bm25
+sentence-transformers
+langchain-core
+langchain-groq
+langgraph
+pydantic
