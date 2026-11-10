@@ -2,304 +2,190 @@
 
 import pandas as pd
 
-from src.retrieval import (
-    retrieve,
-    build_context,
-)
+from src.retrieval import retrieve, retrieve_all_matching, build_context
 from src.agents.state import SurgeryRAGState
 
 
 # =========================================================
-# 1. RETRIEVER AGENT / LANGGRAPH NODE
+# 1. RETRIEVER AGENT
 # =========================================================
 
-def retriever_agent(
-    state: SurgeryRAGState,
-) -> dict:
-    """
-    LangGraph retrieval node.
+def retriever_agent(state: SurgeryRAGState) -> dict:
 
-    Reads:
-        search_query
-        filters
-        retry_count
+    search_query = str(state.get("search_query", state.get("question", ""))).strip()
+    filters = state.get("filters", {}) or {}
+    retry_count = state.get("retry_count", 0)
 
-    Calls:
-        src.retrieval.retrieve()
-
-    Produces:
-        retrieved_chunks
-        context
-        retrieval_timing
-        candidate_k
-        workflow_status
-    """
-
-    # -----------------------------------------------------
-    # 1. Get current search query
-    # -----------------------------------------------------
-
-    search_query = state.get(
-        "search_query",
-        state.get(
-            "question",
-            "",
-        ),
-    )
-
-    search_query = str(
-        search_query
-    ).strip()
+    query_type = state.get("query_type", "")
+    needs_aggregation = state.get("needs_aggregation", False)
 
 
-    # -----------------------------------------------------
-    # 2. Get metadata filters
-    # -----------------------------------------------------
-
-    filters = state.get(
-        "filters",
-        {},
-    )
-
-    if filters is None:
-        filters = {}
-
-
-    # -----------------------------------------------------
-    # 3. Get retry count
-    # -----------------------------------------------------
-
-    retry_count = state.get(
-        "retry_count",
-        0,
-    )
-
-
-    # -----------------------------------------------------
-    # 4. Basic validation
-    # -----------------------------------------------------
+    # =====================================================
+    # 2. BASIC VALIDATION
+    # =====================================================
 
     if not search_query:
-
         return {
             "retrieved_chunks": [],
             "context": "",
             "retrieval_timing": {},
             "candidate_k": 0,
+            "retrieval_mode": "none",
             "workflow_status": "failed",
             "error": "Search query is empty.",
         }
 
 
     # =====================================================
-    # 5. CALL RETRIEVAL SERVICE
+    # 3. CALL RETRIEVAL SERVICE
     # =====================================================
 
     try:
 
-        retrieval_output = retrieve(
-            query=search_query,
-            filters=filters,
-            retry_count=retry_count,
-        )
+        # -------------------------------------------------
+        # Aggregation → retrieve ALL matching records
+        # -------------------------------------------------
 
+        if needs_aggregation or query_type == "aggregation":
 
-        # -----------------------------------------------
-        # Get dataframe
-        # -----------------------------------------------
+            retrieval_output = retrieve_all_matching(
+                filters=filters,
+            )
 
-        results_df = retrieval_output.get(
-            "results",
-            pd.DataFrame(),
-        )
+            retrieval_mode = "all_matching"
 
+        # -------------------------------------------------
+        # Normal RAG → Top-K hybrid retrieval
+        # -------------------------------------------------
 
-        # -----------------------------------------------
-        # Get timing
-        # -----------------------------------------------
+        else:
 
-        timing = retrieval_output.get(
-            "timing",
-            {},
-        )
+            retrieval_output = retrieve(
+                query=search_query,
+                filters=filters,
+                retry_count=retry_count,
+            )
 
-
-        # -----------------------------------------------
-        # Candidate pool size
-        # -----------------------------------------------
-
-        candidate_k = retrieval_output.get(
-            "candidate_k",
-            0,
-        )
+            retrieval_mode = "hybrid_top_k"
 
 
         # =================================================
-        # 6. NO RESULTS FOUND
+        # 4. GET RETRIEVAL OUTPUT
         # =================================================
 
-        if (
-            results_df is None
-            or results_df.empty
-        ):
+        results_df = retrieval_output.get("results", pd.DataFrame())
+        timing = retrieval_output.get("timing", {})
+        candidate_k = retrieval_output.get("candidate_k", 0)
 
+
+        # =================================================
+        # 5. NO RESULTS
+        # =================================================
+
+        if results_df is None or results_df.empty:
             return {
                 "retrieved_chunks": [],
                 "context": "",
                 "retrieval_timing": timing,
                 "candidate_k": candidate_k,
+                "retrieval_mode": retrieval_mode,
                 "workflow_status": "retrieved",
                 "error": None,
             }
 
 
         # =================================================
-        # 7. BUILD CONTEXT FOR ANSWER AGENT
+        # 6. BUILD CONTEXT
         # =================================================
 
-        context = build_context(
-            results_df
-        )
+        # For aggregation we may have many records.
+        # Analytics uses ALL records, but LLM context does not
+        # need hundreds of chunks.
+        if retrieval_mode == "all_matching":
+            context_df = results_df.head(5)
+        else:
+            context_df = results_df
 
-
-        # =================================================
-        # 8. CONVERT DATAFRAME TO SERIALIZABLE RECORDS
-        # =================================================
-
-        retrieved_chunks = (
-            results_df
-            .replace(
-                {
-                    float("nan"): None
-                }
-            )
-            .to_dict(
-                orient="records"
-            )
-        )
+        context = build_context(context_df)
 
 
         # =================================================
-        # 9. RETURN STATE UPDATE
+        # 7. SERIALIZE ALL RETRIEVED RECORDS
+        # =================================================
+
+        results_df = results_df.where(pd.notnull(results_df), None)
+        retrieved_chunks = results_df.to_dict(orient="records")
+
+
+        # =================================================
+        # 8. RETURN STATE UPDATE
         # =================================================
 
         return {
-            "retrieved_chunks":
-                retrieved_chunks,
-
-            "context":
-                context,
-
-            "retrieval_timing":
-                timing,
-
-            "candidate_k":
-                candidate_k,
-
-            "workflow_status":
-                "retrieved",
-
-            "error":
-                None,
+            "retrieved_chunks": retrieved_chunks,
+            "context": context,
+            "retrieval_timing": timing,
+            "candidate_k": candidate_k,
+            "retrieval_mode": retrieval_mode,
+            "workflow_status": "retrieved",
+            "error": None,
         }
 
 
     # =====================================================
-    # 10. ERROR HANDLING
+    # 9. ERROR HANDLING
     # =====================================================
 
     except Exception as exc:
-
         return {
             "retrieved_chunks": [],
             "context": "",
             "retrieval_timing": {},
             "candidate_k": 0,
+            "retrieval_mode": "failed",
             "workflow_status": "failed",
-            "error": (
-                f"Retrieval error: "
-                f"{str(exc)}"
-            ),
+            "error": f"Retrieval error: {str(exc)}",
         }
 
 
 # =========================================================
-# 11. SIMPLE TEST
+# 10. SIMPLE TEST
 # =========================================================
 
 if __name__ == "__main__":
 
-    test_state = {
-        "question":
-            (
-                "Which instruments were used "
-                "during Cholecystectomy?"
-            ),
+    test_states = [
 
-        "search_query":
-            (
-                "Which instruments were used "
-                "during Cholecystectomy?"
-            ),
-
-        "filters": {
-            "surgery_type":
-                "Cholecystectomy"
+        # Normal Top-K retrieval
+        {
+            "question": "Which instruments were used during Cholecystectomy?",
+            "search_query": "Which instruments were used during Cholecystectomy?",
+            "filters": {"surgery_type": "Cholecystectomy"},
+            "query_type": "instrument_lookup",
+            "needs_aggregation": False,
+            "retry_count": 0,
         },
 
-        "retry_count":
-            0,
-    }
+        # All matching retrieval
+        {
+            "question": "What is the average duration of Cholecystectomy surgeries?",
+            "search_query": "average duration of Cholecystectomy surgeries",
+            "filters": {"surgery_type": "Cholecystectomy"},
+            "query_type": "aggregation",
+            "needs_aggregation": True,
+            "retry_count": 0,
+        },
+    ]
 
+    for test_state in test_states:
 
-    result = retriever_agent(
-        test_state
-    )
+        result = retriever_agent(test_state)
 
-
-    print(
-        "\nWorkflow status:",
-        result[
-            "workflow_status"
-        ],
-    )
-
-
-    print(
-        "\nCandidate K:",
-        result[
-            "candidate_k"
-        ],
-    )
-
-
-    print(
-        "\nRetrieval timing:"
-    )
-
-    print(
-        result[
-            "retrieval_timing"
-        ]
-    )
-
-
-    print(
-        "\nRetrieved chunks:",
-        len(
-            result[
-                "retrieved_chunks"
-            ]
-        ),
-    )
-
-
-    print(
-        "\nContext:\n"
-    )
-
-    print(
-        result[
-            "context"
-        ][:2000]
-    )
+        print("\n" + "=" * 70)
+        print("Question:", test_state["question"])
+        print("Retrieval mode:", result.get("retrieval_mode"))
+        print("Candidate K:", result.get("candidate_k"))
+        print("Retrieved chunks:", len(result.get("retrieved_chunks", [])))
+        print("Retrieval timing:", result.get("retrieval_timing"))
+        print("Workflow status:", result.get("workflow_status"))
+        print("Error:", result.get("error"))

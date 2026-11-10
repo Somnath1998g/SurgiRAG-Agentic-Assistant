@@ -242,14 +242,16 @@ def route_after_router(state: SurgeryRAGState) -> str:
 if __name__ == "__main__":
 
     test_questions = [
-        "Which instruments were used during Cholecystectomy?",
-        "What was the surgery duration for the Cholecystectomy case?",
-        "What is the average duration of Cholecystectomy surgeries?",
-        "Which Cholecystectomy case had the longest duration?",
-        "How many Cholecystectomy surgeries are recorded?",
-        "Compare the surgery duration of Cholecystectomy and Appendectomy cases.",
-        "How many times was the clutch pedal pressed?",
-        "What is the weather in Chennai?",
+        # "Which instruments were used during Cholecystectomy?",
+        "What was the surgery duration for the Appendectomy case?",
+        # "What is the average duration of Cholecystectomy surgeries?",
+        # "Which Cholecystectomy case had the longest duration?",
+        # "How many Cholecystectomy surgeries are recorded?",
+        # "Compare the surgery duration of Cholecystectomy and Appendectomy cases.",
+        # "How many times was the clutch pedal pressed?",
+        # "What is the weather in Chennai?"
+        "What surgery type was recorded for case Hysterectomy_2025-10-16_14-05-00?",
+        "How many times was the clutch pedal pressed in case Appendectomy_2025-10-07_13-28-00?"
     ]
 
     for question in test_questions:

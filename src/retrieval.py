@@ -794,6 +794,33 @@ def hybrid_search(
 # =========================================================
 # 13. AGENT-FRIENDLY RETRIEVAL FUNCTION
 # =========================================================
+def retrieve_all_matching(filters=None):
+    """
+    Retrieve all chunks matching metadata filters.
+
+    Used for deterministic aggregation queries where top_k
+    retrieval would produce incomplete calculations.
+    """
+
+    filtered_df = apply_metadata_filters(
+        metadata_df,
+        filters,
+    )
+
+    if filtered_df.empty:
+        return {
+            "results": filtered_df,
+            "timing": {},
+            "candidate_k": len(filtered_df),
+        }
+
+    return {
+        "results": filtered_df.reset_index(drop=True),
+        "timing": {
+            "retrieval_latency_ms": 0.0,
+        },
+        "candidate_k": len(filtered_df),
+    }
 
 def retrieve(
     query,

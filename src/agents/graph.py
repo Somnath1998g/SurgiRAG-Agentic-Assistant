@@ -5,10 +5,11 @@ from langgraph.graph import StateGraph, START, END
 from src.agents.state import SurgeryRAGState
 from src.agents.router import router_agent, route_after_router
 from src.agents.retriever import retriever_agent
+from src.agents.analytics import analytics_agent
 from src.agents.answer import answer_agent
 from src.agents.validator import validator_agent, route_after_validator
 from src.agents.rewriter import rewriter_agent
-from src.agents.analytics import analytics_agent
+
 
 from src.config import FALLBACK_RESPONSE
 from src.prompts import UNSUPPORTED_RESPONSE
@@ -148,8 +149,9 @@ if __name__ == "__main__":
     test_questions = [
         # "Which instruments were used during Cholecystectomy?",
         # "What was the total surgery duration for the Cholecystectomy case?",
-        "What is the total duration of the last two cases for the Cholecystectomy case?",
+        # "What is the duration of the last case for the Cholecystectomy case?",
         # "What is the weather today?",
+        "How many times was the clutch pedal pressed in case Appendectomy_2025-10-07_13-28-00?"
     ]
 
     for question in test_questions:
